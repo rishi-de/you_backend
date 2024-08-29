@@ -106,7 +106,9 @@ const PORT = 3001;
       redirect_uri: credentials.web.redirect_uris[0], // Ensure redirect_uri is included here
     });
 
-    console.log("Attempting to open OAuth URL in the browser...");
+    console.log("OAuth URL:", authUrl);
+
+    // Attempt to open OAuth URL
     open(authUrl).then(() => {
       console.log("OAuth URL opened successfully.");
     }).catch((err) => {
