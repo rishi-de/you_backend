@@ -33,10 +33,13 @@ const PORT = 3001;
   app.post("/upload", async (req, res) => {
     const { title, description, presignedUrl } = req.body;
 
-    console.log(presignedUrl);
+    console.log("Received upload request.");
+    console.log("Presigned URL:", presignedUrl);
 
     if (presignedUrl) {
       try {
+        console.log("Fetching file from presigned URL...");
+
         const response = await axios.get(presignedUrl, {
           responseType: "stream",
         });
@@ -47,6 +50,8 @@ const PORT = 3001;
         response.data.pipe(writer);
 
         writer.on("finish", () => {
+          console.log("File fetched and saved successfully.");
+
           req.file = {
             path: videoPath,
             originalname: path.basename(videoPath),
@@ -66,17 +71,18 @@ const PORT = 3001;
           res.status(500).json({ error: "Error writing file" });
         });
       } catch (error) {
-        console.error("Error fetching file from link:", error);
+        console.error("Error fetching file from link:", error.message);
         res.status(500).json({ error: "Error fetching file from link" });
       }
     } else {
       uploadVideoFile(req, res, (err) => {
         if (err) {
-          console.error("Error uploading file:", err);
+          console.error("Error uploading file:", err.message);
           return res.status(500).json({ error: "Error uploading file" });
         }
 
         const filename = req.file.filename;
+        console.log("File uploaded successfully:", filename);
         handleFileUpload(req, res, title, description, filename);
       });
     }
@@ -88,6 +94,7 @@ const PORT = 3001;
       return res.status(400).json({ error: "Filename is undefined" });
     }
 
+    console.log("Generating OAuth URL...");
     const authUrl = oAuth.generateAuthUrl({
       access_type: "offline",
       scope: "https://www.googleapis.com/auth/youtube.upload",
@@ -99,7 +106,11 @@ const PORT = 3001;
       redirect_uri: credentials.web.redirect_uris[0], // Ensure redirect_uri is included here
     });
 
-    open(authUrl);
+    console.log("Opening OAuth URL in browser...");
+    open(authUrl).catch((err) => {
+      console.error("Error opening OAuth URL:", err.message);
+      res.status(500).json({ error: "Error opening OAuth URL" });
+    });
   };
 
   app.get("/oauth2callback", (req, res) => {
@@ -110,6 +121,7 @@ const PORT = 3001;
       return res.status(400).json({ error: "Missing state or code" });
     }
 
+    console.log("OAuth2 callback received.");
     const { filename, title, description } = JSON.parse(state);
 
     if (!filename) {
@@ -121,10 +133,11 @@ const PORT = 3001;
       { code, redirect_uri: credentials.web.redirect_uris[0] },
       (err, tokens) => {
         if (err) {
-          console.error("Error getting tokens:", err);
+          console.error("Error getting tokens:", err.message);
           return res.status(500).send("Error getting tokens.");
         }
 
+        console.log("Tokens retrieved successfully.");
         oAuth.setCredentials(tokens);
 
         youtube.videos.insert(
@@ -140,7 +153,7 @@ const PORT = 3001;
           },
           (err, data) => {
             if (err) {
-              console.error("Error uploading video:", err);
+              console.error("Error uploading video:", err.message);
               return res.status(500).send("Error uploading video.");
             }
 
@@ -149,7 +162,7 @@ const PORT = 3001;
             // Delete the file after upload
             fs.unlink(`./uploads/${filename}`, (unlinkErr) => {
               if (unlinkErr) {
-                console.error("Error deleting file:", unlinkErr);
+                console.error("Error deleting file:", unlinkErr.message);
               } else {
                 console.log("File deleted successfully.");
               }
