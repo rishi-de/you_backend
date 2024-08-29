@@ -29,11 +29,15 @@ const uploadVideoFile = multer({
 }).single("videoFile");
 
 app.post("/upload", async (req, res) => {
-  const { title, description, link, option } = req.body;
+  const { title, description, presignedUrl } = req.body;
 
-  if (link) {
+  console.log(presignedUrl);
+
+  if (presignedUrl) {
     try {
-      const response = await axios.get(link, { responseType: "stream" });
+      const response = await axios.get(presignedUrl, {
+        responseType: "stream",
+      });
 
       const videoPath = `./uploads/${uuidv4()}.mp4`;
       const writer = fs.createWriteStream(videoPath);
@@ -97,11 +101,14 @@ const handleFileUpload = (req, res, title, description, filename) => {
 };
 
 app.get("/oauth2callback", (req, res) => {
-  console.log("OAuth2 callback hit");
-  res.redirect("http://localhost:5173/success");
+  const { state, code } = req.query;
 
-  const { filename, title, description } = JSON.parse(req.query.state);
-  const code = req.query.code;
+  if (!state || !code) {
+    console.error("Missing state or code in OAuth2 callback");
+    return res.status(400).json({ error: "Missing state or code" });
+  }
+
+  const { filename, title, description } = JSON.parse(state);
 
   if (!filename) {
     console.error("Filename is undefined in OAuth2 callback");
@@ -112,7 +119,7 @@ app.get("/oauth2callback", (req, res) => {
     { code, redirect_uri: credentials.web.redirect_uris[0] },
     (err, tokens) => {
       if (err) {
-        console.log(err);
+        console.error("Error getting tokens:", err);
         return res.status(500).send("Error getting tokens.");
       }
 
@@ -122,7 +129,7 @@ app.get("/oauth2callback", (req, res) => {
         {
           resource: {
             snippet: { title, description },
-            status: { privacyStatus: "public" },
+            status: { privacyStatus: "private" },
           },
           part: "snippet,status",
           media: {
@@ -131,12 +138,22 @@ app.get("/oauth2callback", (req, res) => {
         },
         (err, data) => {
           if (err) {
-            console.log(err);
+            console.error("Error uploading video:", err);
             return res.status(500).send("Error uploading video.");
           }
 
           console.log("Video uploaded successfully.");
-          process.exit();
+
+          // Delete the file after upload
+          fs.unlink(`./uploads/${filename}`, (unlinkErr) => {
+            if (unlinkErr) {
+              console.error("Error deleting file:", unlinkErr);
+            } else {
+              console.log("File deleted successfully.");
+            }
+          });
+
+          res.send("Video uploaded and file deleted successfully.");
         }
       );
     }
