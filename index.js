@@ -39,7 +39,6 @@ const PORT = 3001;
     if (presignedUrl) {
       try {
         console.log("Fetching file from presigned URL...");
-
         const response = await axios.get(presignedUrl, {
           responseType: "stream",
         });
@@ -51,19 +50,12 @@ const PORT = 3001;
 
         writer.on("finish", () => {
           console.log("File fetched and saved successfully.");
-
           req.file = {
             path: videoPath,
             originalname: path.basename(videoPath),
           };
 
-          handleFileUpload(
-            req,
-            res,
-            title,
-            description,
-            path.basename(videoPath)
-          );
+          handleFileUpload(req, res, title, description, path.basename(videoPath));
         });
 
         writer.on("error", (error) => {
@@ -71,18 +63,17 @@ const PORT = 3001;
           res.status(500).json({ error: "Error writing file" });
         });
       } catch (error) {
-        console.error("Error fetching file from link:", error.message);
+        console.error("Error fetching file from link:", error);
         res.status(500).json({ error: "Error fetching file from link" });
       }
     } else {
       uploadVideoFile(req, res, (err) => {
         if (err) {
-          console.error("Error uploading file:", err.message);
+          console.error("Error uploading file:", err);
           return res.status(500).json({ error: "Error uploading file" });
         }
 
         const filename = req.file.filename;
-        console.log("File uploaded successfully:", filename);
         handleFileUpload(req, res, title, description, filename);
       });
     }
@@ -103,18 +94,20 @@ const PORT = 3001;
         title,
         description,
       }),
-      redirect_uri: credentials.web.redirect_uris[0], // Ensure redirect_uri is included here
+      // Use your deployed domain here
+      redirect_uri: `${credentials.web.redirect_uris[0]}`.replace("localhost", "youback.rishicode.com"),
     });
 
     console.log("OAuth URL:", authUrl);
+    console.log("Attempting to open OAuth URL in the browser...");
 
-    // Attempt to open OAuth URL
-    open(authUrl).then(() => {
-      console.log("OAuth URL opened successfully.");
-    }).catch((err) => {
-      console.error("Error opening OAuth URL:", err.message);
-      res.status(500).json({ error: "Error opening OAuth URL" });
-    });
+    open(authUrl)
+      .then(() => {
+        console.log("OAuth URL opened successfully.");
+      })
+      .catch((err) => {
+        console.error("Failed to open OAuth URL in browser:", err);
+      });
   };
 
   app.get("/oauth2callback", (req, res) => {
@@ -125,7 +118,6 @@ const PORT = 3001;
       return res.status(400).json({ error: "Missing state or code" });
     }
 
-    console.log("OAuth2 callback received.");
     const { filename, title, description } = JSON.parse(state);
 
     if (!filename) {
@@ -134,14 +126,13 @@ const PORT = 3001;
     }
 
     oAuth.getToken(
-      { code, redirect_uri: credentials.web.redirect_uris[0] },
+      { code, redirect_uri: `${credentials.web.redirect_uris[0]}`.replace("localhost", "youback.rishicode.com") },
       (err, tokens) => {
         if (err) {
-          console.error("Error getting tokens:", err.message);
+          console.error("Error getting tokens:", err);
           return res.status(500).send("Error getting tokens.");
         }
 
-        console.log("Tokens retrieved successfully.");
         oAuth.setCredentials(tokens);
 
         youtube.videos.insert(
@@ -157,7 +148,7 @@ const PORT = 3001;
           },
           (err, data) => {
             if (err) {
-              console.error("Error uploading video:", err.message);
+              console.error("Error uploading video:", err);
               return res.status(500).send("Error uploading video.");
             }
 
@@ -166,7 +157,7 @@ const PORT = 3001;
             // Delete the file after upload
             fs.unlink(`./uploads/${filename}`, (unlinkErr) => {
               if (unlinkErr) {
-                console.error("Error deleting file:", unlinkErr.message);
+                console.error("Error deleting file:", unlinkErr);
               } else {
                 console.log("File deleted successfully.");
               }
@@ -183,7 +174,8 @@ const PORT = 3001;
     type: "oauth",
     client_id: credentials.web.client_id,
     client_secret: credentials.web.client_secret,
-    redirect_uri: credentials.web.redirect_uris[0], // Ensure redirect_uri is included here
+    // Use your deployed domain here
+    redirect_uri: `${credentials.web.redirect_uris[0]}`.replace("localhost", "youback.rishicode.com"),
   });
 
   app.listen(PORT, () => {
